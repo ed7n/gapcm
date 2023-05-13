@@ -1,5 +1,5 @@
 /**
- * GA PCM Encoder
+ * GAPCM Encoder
  *
  * Entry point to the encoder application. It consists of the main function from
  * which the application initializes into an instance.
@@ -72,16 +72,33 @@ int gamenc_act(struct GamInstance *i) {
             ? gapcm_encode_stream_for(i->header, i->source, i->output,
                                       UINT32_MAX)
             : gapcm_encode_stream(i->header, i->source, i->output);
-    if (!i->options->has_length && fseek(i->output, 0, SEEK_SET) == SUCCESS) {
-      i->header->length = count / GAPCM_SECTOR_BLOCKS /
-                          gapcm_to_channelcount(i->header->format);
+    uint16_t channel_count = gapcm_to_channelcount(i->header->format);
+    i->write_count += count;
+    if (i->options->has_length) {
+      unsigned long long comparand =
+          i->header->length * channel_count * GAPCM_SECTOR_BLOCKS;
+      comparand = comparand - comparand % GAPCM_SECTOR_SIZE +
+                  GAPCM_SECTOR_SIZE *
+                      (comparand % GAPCM_SECTOR_SIZE > 0 ? channel_count : 0);
+      if (i->options->trail ? count < comparand : count != comparand) {
+        out = EXIT_FAILURE;
+        application_print_message(i->options->output, GAM_ERROR_OUTPUT);
+      }
+    } else if (fseek(i->output, 0, SEEK_SET) == SUCCESS) {
+      i->header->length = count / GAPCM_SECTOR_BLOCKS / channel_count;
       if (gapcm_encode_header(i->header, sector) != GAPCM_SECTOR_SIZE) {
         out = gamenc_error_header();
         break;
       }
       fwrite(sector, 1, GAPCM_SECTOR_SIZE, i->output);
+    } else {
+      out = EXIT_FAILURE;
+      application_print_message(i->options->output, "Seek failed.");
     }
-    i->write_count += count;
+    if ((i->options->trail || !i->options->has_length) && feof(i->source) &&
+        !ferror(i->source)) {
+      clearerr(i->source);
+    }
     break;
   }
   free(sector);
@@ -161,8 +178,8 @@ int gamenc_read(struct GamInstance *i) {
 int main(int argument_count, char *arguments[]) {
   if (argument_count < 2) {
     gamenc_print_header();
-    application_print_strings(1, GAMENC_APPHELP_USAGE EOL
-                              "`--help` for more information." EOL);
+    application_print_strings(1,
+                              GAMENC_APPHELP_USAGE EOL APPHELP_INVITATION EOL);
     return EXIT_SUCCESS;
   }
   struct GamInstance *instance = gam_instance_make(arguments, argument_count);

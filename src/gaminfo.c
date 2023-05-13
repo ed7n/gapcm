@@ -1,5 +1,5 @@
 /**
- * GA PCM Info
+ * GAPCM Info
  *
  * Entry point to the prober application. It consists of the main function from
  * which the application initializes into an instance.
@@ -39,11 +39,6 @@ If none is given, then it prints the header in a friendly format. A block spans\
 /** Application description. */
 #define GAMINFO_APPINFO_DESCRIPTION APPINFO_DESCRIPTION "header prober."
 
-int gaminfo_error_header(void) {
-  application_print_message(GAMINFO_APPINFO_NAME, "Decode header failed.");
-  return EXIT_FAILURE;
-}
-
 int gaminfo_error_options(void) {
   const char *message;
   int number = rand();
@@ -63,7 +58,7 @@ int gaminfo_act(struct GamInstance *i) {
   char *o = i->options->output;
   int out = -1;
   if (o == NULL) {
-    char string[182];
+    char string[GAPCM_HEADER_STRING_CAPACITY];
     gapcm_header_stringify(h, string);
     out = puts(string);
   } else if (string_equals_any(o, 2, "-c", "--channels")) {
@@ -129,7 +124,7 @@ int gaminfo_read(struct GamInstance *i) {
     i->read_count += fread(sector, 1, GAPCM_SECTOR_SIZE, i->source);
     if (i->read_count != GAPCM_SECTOR_SIZE ||
         gapcm_decode_header(sector, i->header) != GAPCM_SECTOR_SIZE) {
-      out = gaminfo_error_header();
+      out = gam_error_header(i->options->source);
       break;
     }
     if (gapcm_header_check(i->header, &error)) {
@@ -150,8 +145,8 @@ int gaminfo_read(struct GamInstance *i) {
 int main(int argument_count, char *arguments[]) {
   if (argument_count < 2) {
     gaminfo_print_header();
-    application_print_strings(1, GAMINFO_APPHELP_USAGE EOL
-                              "`--help` for more information." EOL);
+    application_print_strings(1,
+                              GAMINFO_APPHELP_USAGE EOL APPHELP_INVITATION EOL);
     return EXIT_SUCCESS;
   }
   srand(time(NULL));

@@ -2,7 +2,7 @@
 
 {
   declare -p ews || declare -A ews=([base]="${0%/*}" [exec]="${0}" \
-      [name]='GAPCM Reproducibility Test' [sign]='u0r0 by Brendon, 05/05/2023.')
+      [name]='GAPCM Reproducibility Test' [sign]='u0r1 by Brendon, 05/13/2023.')
 } &> /dev/null
 
 # Decoder executable.
@@ -45,7 +45,7 @@ for gamItm in ${gamItms}; do
   done
   {
     "${GAM_DEC}" -p 0 -l 1 -t -o - "${gamItm}" \
-        | "${GAM_ENC}" -c $("${GAM_PRB}" -c "${gamItm}") -m "${gamFlds[1]}" -n \
+        | "${GAM_ENC}" -c "${gamFlds[0]}" -m "${gamFlds[1]}" -n \
             "${gamFlds[2]}" -ea '0x'"${gamFlds[3]}" '0x'"${gamFlds[4]}" \
             '0x'"${gamFlds[5]}" '0x'"${gamFlds[6]}" '0x'"${gamFlds[7]}" \
             '0x'"${gamFlds[8]}" -ep "${gamFlds[9]}" -ed "${gamFlds[10]}" -el \

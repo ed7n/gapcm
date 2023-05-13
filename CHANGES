@@ -1,0 +1,18 @@
+GAPCM: Changes
+
+—Update 0
+
+——Revision 1, 05/13/2023.
+- Decoder and encoder output completion checks.
+- Fixed failure exits on expected end-of-files.
+- Fixed non-release build command in README.
+- Removed remaking of IO context in `gapcm_decode_stream`.
+- Seek failure support.
+- Stringify header format field as channel count.
+  - Updated reproducibility test to follow.
+- Unified project name to "GAPCM".
+  - Formerly "GA PCM" but not everywhere.
+- Variablized maximum needed string capacity for header stringification.
+
+——Revision 0, 05/05/2023.
+- Initial release.

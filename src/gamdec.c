@@ -1,5 +1,5 @@
 /**
- * GA PCM Decoder
+ * GAPCM Decoder
  *
  * Entry point to the decoder application. It consists of the main function from
  * which the application initializes into an instance.
@@ -44,27 +44,63 @@ prober and apply them elsewhere. Also look there for details on units.\n" APPHEL
 /** Usage syntax. */
 #define GAMDEC_APPHELP_USAGE "Usage: -o <path> [<override>|<option>]... <file>"
 
-int gamdec_error_header(void) {
-  application_print_message(GAMDEC_APPINFO_NAME, "Decode header failed.");
-  return EXIT_FAILURE;
+bool gamdec_act_check(struct GamInstance *i, int *success,
+                      const unsigned long long count,
+                      const unsigned long long comparand) {
+  if (count != comparand) {
+    *success = EXIT_FAILURE;
+    application_print_message(i->options->output, GAM_ERROR_OUTPUT);
+  } else if (feof(i->source) && !ferror(i->source)) {
+    clearerr(i->source);
+  }
+  return *success == EXIT_SUCCESS;
 }
 
 int gamdec_act(struct GamInstance *i) {
   int out = EXIT_SUCCESS;
   i->write_count += gapcm_decode_pregap(i->header->pregap, i->output);
   while (i->write_count == GAPCM_BLOCK_SIZE * i->header->pregap) {
-    if (i->options->trail && i->options->loop > 0) {
-      i->write_count += gapcm_decode_stream(i->header, i->source, i->output,
-                                            i->options->loop - 1);
-      if (!gam_check_files(i, &out) ||
-          gapcm_decode_seek(i->source, i->header->mark) != SUCCESS) {
+    unsigned long long mark = GAPCM_BLOCK_SIZE * i->header->mark;
+    unsigned long long length =
+        i->header->length * gapcm_to_channelcount(i->header->format);
+    unsigned long long length_loop = length - mark;
+    if (i->options->loop > 1) {
+      unsigned long long count = gapcm_decode_stream(
+          i->header, i->source, i->output, i->options->loop - 1);
+      if (!gamdec_act_check(i, &out, count,
+                            length + length_loop * (i->options->loop - 2))) {
+        if (count == length) {
+          application_print_message(i->options->source,
+                                    "Seek may have failed.");
+        }
         break;
       }
+      if (!gam_check_files(i, &out)) {
+        break;
+      }
+      if (gapcm_decode_seek(i->source, i->header->mark) != SUCCESS) {
+        out = EXIT_FAILURE;
+        application_print_message(i->options->source, "Seek failed.");
+        break;
+      }
+    }
+    if (i->options->trail) {
       i->write_count +=
           gapcm_decode_stream_for(i->header, i->source, i->output, UINT32_MAX);
+      if (feof(i->source) && !ferror(i->source)) {
+        clearerr(i->source);
+      }
     } else {
-      i->write_count += gapcm_decode_stream(i->header, i->source, i->output,
-                                            i->options->loop);
+      unsigned long long count;
+      if (i->options->loop > 1) {
+        count = gapcm_decode_loop(i->header, i->source, i->output, 1);
+        gamdec_act_check(i, &out, count, length_loop);
+      } else {
+        count = gapcm_decode_stream(i->header, i->source, i->output,
+                                    i->options->loop);
+        gamdec_act_check(i, &out, count, mark + length_loop * i->options->loop);
+      }
+      i->write_count += count;
     }
     break;
   }
@@ -118,7 +154,7 @@ int gamdec_read(struct GamInstance *i) {
     i->read_count += fread(sector, 1, GAPCM_SECTOR_SIZE, i->source);
     if (i->read_count != GAPCM_SECTOR_SIZE ||
         gapcm_decode_header(sector, h) != GAPCM_SECTOR_SIZE) {
-      out = gamdec_error_header();
+      out = gam_error_header(o->source);
       break;
     }
     if (o->has_channels) {
@@ -149,7 +185,7 @@ int gamdec_read(struct GamInstance *i) {
       h->pregap = o->pregap;
     }
     if (o->info) {
-      char string[182];
+      char string[GAPCM_HEADER_STRING_CAPACITY];
       gapcm_header_stringify(i->header, string);
       application_print_strings(2, string, EOL);
     }
@@ -173,8 +209,8 @@ int gamdec_read(struct GamInstance *i) {
 int main(int argument_count, char *arguments[]) {
   if (argument_count < 2) {
     gamdec_print_header();
-    application_print_strings(1, GAMDEC_APPHELP_USAGE EOL
-                              "`--help` for more information." EOL);
+    application_print_strings(1,
+                              GAMDEC_APPHELP_USAGE EOL APPHELP_INVITATION EOL);
     return EXIT_SUCCESS;
   }
   struct GamInstance *instance = gam_instance_make(arguments, argument_count);

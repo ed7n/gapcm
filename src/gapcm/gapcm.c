@@ -15,7 +15,7 @@
 
 /** Represents a transcoding context. */
 struct GaPcmIoContext {
-  /** GA PCM header. */
+  /** GAPCM header. */
   const struct GaPcmHeader *header;
   /** Output stream. */
   FILE *output;
@@ -27,7 +27,7 @@ struct GaPcmIoContext {
   size_t *indexes;
   /** Consumer PCM buffers. */
   uint8_t *blocks;
-  /** GA PCM sector buffer. */
+  /** GAPCM sector buffer. */
   uint8_t *sector;
   /** Stream channel count. */
   uint16_t CHANNEL_COUNT;
@@ -70,6 +70,28 @@ static unsigned long long gapcm_decode_context_for(struct GaPcmIoContext *c,
       out++;
     }
     count -= c->counts[0] * c->CHANNEL_COUNT;
+  }
+  return out;
+}
+
+static unsigned long long
+gapcm_decode_context_loop(struct GaPcmIoContext *context, int loop_count) {
+  if (loop_count < 1) {
+    return 0;
+  }
+  unsigned long long length_loop =
+      context->header->length * context->CHANNEL_COUNT -
+      GAPCM_BLOCK_SIZE * context->header->mark;
+  unsigned long long out = 0;
+  while (true) {
+    unsigned long long count_decode =
+        gapcm_decode_context_for(context, length_loop);
+    out += count_decode;
+    if (count_decode != length_loop || --loop_count < 1 ||
+        gapcm_decode_seek(context->source, context->header->mark) !=
+            GAPCM_SUCCESS) {
+      break;
+    }
   }
   return out;
 }
@@ -167,24 +189,8 @@ size_t gapcm_decode_header(uint8_t *restrict sector,
 unsigned long long gapcm_decode_loop(const struct GaPcmHeader *header,
                                      FILE *restrict source,
                                      FILE *restrict output, int loop_count) {
-  if (loop_count < 1) {
-    return 0;
-  }
   struct GaPcmIoContext *context = gapcm_iocontext_make(header, source, output);
-  unsigned long long length_loop =
-      context->header->length * context->CHANNEL_COUNT -
-      GAPCM_BLOCK_SIZE * context->header->mark;
-  unsigned long long out = 0;
-  while (true) {
-    unsigned long long count_decode =
-        gapcm_decode_context_for(context, length_loop);
-    out += count_decode;
-    if (count_decode != length_loop || --loop_count < 1 ||
-        gapcm_decode_seek(context->source, context->header->mark) !=
-            GAPCM_SUCCESS) {
-      break;
-    }
-  }
+  unsigned long long out = gapcm_decode_context_loop(context, loop_count);
   context = gapcm_iocontext_free(context);
   return out;
 }
@@ -244,9 +250,11 @@ unsigned long long gapcm_decode_stream(const struct GaPcmHeader *header,
   struct GaPcmIoContext *context = gapcm_iocontext_make(header, source, output);
   unsigned long long mark = GAPCM_BLOCK_SIZE * context->header->mark;
   unsigned long long out = gapcm_decode_context_for(context, mark);
+  if (out == mark) {
+    out += gapcm_decode_context_loop(context, loop_count);
+  }
   context = gapcm_iocontext_free(context);
-  return out == mark ? gapcm_decode_loop(header, source, output, loop_count)
-                     : out;
+  return out;
 }
 
 unsigned long long gapcm_decode_stream_for(const struct GaPcmHeader *header,
@@ -345,14 +353,14 @@ struct GaPcmHeader *gapcm_header_make(void) {
 
 int gapcm_header_stringify(const struct GaPcmHeader *h, char *restrict string) {
   return snprintf(
-      string, 182,
-      "format      : %u\nmark        : %u\nlength      : "
-      "%u\necho_pans   : %02x %02x %02x %02x %02x %02x\necho_pregap : "
-      "%u\necho_delay  : %u\necho_levels : %u %u %u\npregap      : %u",
-      h->format, h->mark, h->length, h->echo_pans[0], h->echo_pans[1],
-      h->echo_pans[2], h->echo_pans[3], h->echo_pans[4], h->echo_pans[5],
-      h->echo_pregap, h->echo_delay, h->echo_levels[0], h->echo_levels[1],
-      h->echo_levels[2], h->pregap);
+      string, GAPCM_HEADER_STRING_CAPACITY,
+      "channel_count : %u\nmark          : %u\nlength        : "
+      "%u\necho_pans     : %02x %02x %02x %02x %02x %02x\necho_pregap   : "
+      "%u\necho_delay    : %u\necho_levels   : %u %u %u\npregap        : %u",
+      gapcm_to_channelcount(h->format), h->mark, h->length, h->echo_pans[0],
+      h->echo_pans[1], h->echo_pans[2], h->echo_pans[3], h->echo_pans[4],
+      h->echo_pans[5], h->echo_pregap, h->echo_delay, h->echo_levels[0],
+      h->echo_levels[1], h->echo_levels[2], h->pregap);
 }
 
 uint16_t gapcm_to_channelcount(const uint16_t format) {

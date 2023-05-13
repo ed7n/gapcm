@@ -1,5 +1,5 @@
 /**
- * GA PCM: Header model and transcode functions.
+ * GAPCM: Header model and transcode functions.
  *
  * File operators start from the current position and--unless otherwise
  * mentioned--return their count of output bytes. For PCM transcodes from and to
@@ -21,6 +21,8 @@
 #define GAPCM_FORMAT_MONO 2
 /** Stereo stream format. */
 #define GAPCM_FORMAT_STEREO 1
+/** Maximum count of char units needed for header stringification. */
+#define GAPCM_HEADER_STRING_CAPACITY 198
 /** Consumer PCM sample origin. */
 #define GAPCM_SAMPLE_ORIGIN 0x80
 /** Sector size in bytes. */
@@ -35,7 +37,7 @@
   "The loop start position is more than the logical maximum."
 
 /**
- * Represents a GA PCM header. A block spans 1024 samples, a frame spans one
+ * Represents a GAPCM header. A block spans 1024 samples, a frame spans one
  * sample for mono, two for stereo, and a tick spans 7.8 ms.
  */
 struct GaPcmHeader {
@@ -72,8 +74,8 @@ unsigned long long gapcm_decode_loop(const struct GaPcmHeader *header,
 unsigned long long gapcm_decode_pregap(uint8_t pregap, FILE *file);
 
 /**
- * Translates the given GA PCM sign–magnitude sample. [0x00, 0x7f] maps to
- * [-128, -1], and [0x80, 0xff] to [0, 127]. The returned format depends on
+ * Translates the given GAPCM sign–magnitude sample. [0x00, 0x7f] maps to [-128,
+ * -1], and [0x80, 0xff] to [0, 127]. The returned format depends on
  * `GAPCM_SAMPLE_ORIGIN`.
  */
 uint8_t gapcm_decode_sample(uint8_t sample);
@@ -130,15 +132,15 @@ unsigned long long gapcm_encode_stream_for(const struct GaPcmHeader *header,
  */
 bool gapcm_header_check(const struct GaPcmHeader *header, const char **error);
 
-/** Frees the given GA PCM header. */
+/** Frees the given GAPCM header. */
 struct GaPcmHeader *gapcm_header_free(struct GaPcmHeader *header);
 
-/** Makes a GA PCM header. */
+/** Makes a GAPCM header. */
 struct GaPcmHeader *gapcm_header_make(void);
 
 /**
  * Stringifies the given header to the given string and returns the resulting
- * length. This requires at most 182 char units.
+ * length. This requires at most `GAPCM_HEADER_STRING_CAPACITY` char units.
  */
 int gapcm_header_stringify(const struct GaPcmHeader *header, char *string);
 

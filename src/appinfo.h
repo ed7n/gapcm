@@ -1,5 +1,5 @@
 /**
- * GA PCM: Application Information
+ * GAPCM: Application Information
  *
  * Application descriptions.
  */
@@ -9,11 +9,11 @@
 /** Application name. */
 #define APPINFO_NAME "GAM"
 /** Application version. */
-#define APPINFO_VER "u0r0"
+#define APPINFO_VER "u0r1"
 /** Application version, long version. */
-#define APPINFO_VERSION "Update 0 Revision 0"
+#define APPINFO_VERSION "Update 0 Revision 1"
 /** Application release date. */
-#define APPINFO_DATE "05/05/2023"
+#define APPINFO_DATE "05/13/2023"
 /** Application description. */
 #define APPINFO_DESCRIPTION "Eternal Blue PCM "
 /** Application landing URL. */

@@ -1,10 +1,10 @@
-# GA PCM
+# GAPCM
 
 [[**Homepage**](https://ed7n.github.io/gapcm)]
 
 ## Building
 
-    $ make
+    $ make release
 
 ### Windows
 

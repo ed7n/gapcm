@@ -1,5 +1,5 @@
 /**
- * GA PCM: Application
+ * GAPCM: Application
  *
  * Parts shared by the applications that did not qualify to
  * `common/application.h`. See that for details.
@@ -12,9 +12,11 @@
 #include <stdio.h>
 
 #define GAM_ALERT_STEREO "Output is stereo."
-#define GAM_ERROR_EOF "End-of-file reached."
-#define GAM_ERROR_READ "A read error has occured."
-#define GAM_ERROR_WRITE "A write error has occured."
+#define GAM_ERROR_EOF "Unexpected end-of-file."
+#define GAM_ERROR_HEADER "A header can not be parsed."
+#define GAM_ERROR_OUTPUT "The output is incomplete."
+#define GAM_ERROR_READ "A read error has occurred."
+#define GAM_ERROR_WRITE "A write error has occurred."
 #define GAM_INFO_LISTEN "Now listening from pipe."
 
 /** Exit code: quit. */
@@ -27,7 +29,7 @@ enum GamMode { PARSE, READ, ACT, DONE };
 
 /** Represents an instance. */
 struct GamInstance {
-  /** GA PCM header. */
+  /** GAPCM header. */
   struct GaPcmHeader *header;
   /** Options. */
   struct GamOptions *options;
@@ -103,6 +105,8 @@ struct GamOptions {
 
 /** Checks the output and source files of the given instance. */
 bool gam_check_files(struct GamInstance *instance, int *success);
+
+int gam_error_header(const char *head);
 
 /** Frees the given instance. */
 struct GamInstance *gam_instance_free(struct GamInstance *instance);

@@ -62,6 +62,11 @@ bool gam_check_files(struct GamInstance *i, int *success) {
   return *success == EXIT_SUCCESS;
 }
 
+int gam_error_header(const char *restrict head) {
+  application_print_message(head, GAM_ERROR_HEADER);
+  return EXIT_FAILURE;
+}
+
 struct GamInstance *gam_instance_free(struct GamInstance *i) {
   i->header = gapcm_header_free(i->header);
   i->options = gam_options_free(i->options);

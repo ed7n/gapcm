@@ -1,4 +1,4 @@
-# GA PCM: Makefile
+# GAPCM: Makefile
 
 # Compiler executable.
 #CC := clang
