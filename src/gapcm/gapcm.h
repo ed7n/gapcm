@@ -2,14 +2,18 @@
  * GAPCM: Header model and transcode functions.
  *
  * File operators start from the current position and--unless otherwise
- * mentioned--return their count of output bytes. For PCM transcodes from and to
- * signed 8-bit, change `GAPCM_SAMPLE_ORIGIN` to `0`. `0x80` for unsigned.
- * Consumer PCM refers to PCM of this format.
+ * mentioned--return their count of output bytes. Those that flush and
+ * seek--either for looping or `gapcm_decode_seek`--set `errno` on error. For
+ * PCM transcodes from and to signed 8-bit, change `GAPCM_SAMPLE_ORIGIN` to `0`.
+ * `0x80` for unsigned. Consumer PCM refers to PCM of this format.
  *
  * GA is short for GAME ARTS Co., Ltd.
  */
 #ifndef _GAPCM_H
 #define _GAPCM_H
+
+/** Consumer PCM sample origin. */
+#define GAPCM_SAMPLE_ORIGIN 0x80
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -23,8 +27,6 @@
 #define GAPCM_FORMAT_STEREO 1
 /** Maximum count of char units needed for header stringification. */
 #define GAPCM_HEADER_STRING_CAPACITY 198
-/** Consumer PCM sample origin. */
-#define GAPCM_SAMPLE_ORIGIN 0x80
 /** Sector size in bytes. */
 #define GAPCM_SECTOR_SIZE 2048
 /** Two blocks in a sector. */

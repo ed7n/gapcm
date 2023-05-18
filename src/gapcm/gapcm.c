@@ -1,7 +1,15 @@
 // File operators stop on I/O anomalies. Echo, fade, and gain features are not
 // supported; get their parameters here and apply them elsewhere.
 
+/**
+ * Undo setting of `errno` to `EBADF` on `fflush`. Flushing input streams is
+ * undefined on older POSIX systems where `EBADF` may be set. This is defined by
+ * default for compatibility and should be undefined for debugging.
+ */
+#define GAPCM_FFLUSH_EBADF
+
 #include "gapcm.h"
+#include <errno.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -225,9 +233,17 @@ size_t gapcm_decode_sector(const uint8_t *restrict sector, const size_t count,
 
 #define GAPCM_OFFSET_MAXIMUM UINT32_MAX / GAPCM_SECTOR_SIZE
 int gapcm_decode_seek(FILE *restrict file, uint32_t position) {
+  int errnoo = errno;
   int out = fflush(file);
   if (out != GAPCM_SUCCESS) {
+#ifdef GAPCM_FFLUSH_EBADF
+    if (errno != EBADF) {
+      return out;
+    }
+    errno = errnoo;
+#else
     return out;
+#endif
   }
   out = fseek(file, GAPCM_SECTOR_SIZE, SEEK_SET);
   if (out != GAPCM_SUCCESS) {

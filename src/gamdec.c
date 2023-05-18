@@ -11,7 +11,9 @@
 #include "common/constants.h"
 #include "gam.h"
 #include "gapcm/gapcm.h"
+#include <errno.h>
 #include <stdlib.h>
+#include <string.h>
 
 /** Application name. */
 #define GAMDEC_APPINFO_NAME APPINFO_NAME "dec"
@@ -65,22 +67,23 @@ int gamdec_act(struct GamInstance *i) {
         i->header->length * gapcm_to_channelcount(i->header->format);
     unsigned long long length_loop = length - mark;
     if (i->options->loop > 1) {
+      errno = 0;
       unsigned long long count = gapcm_decode_stream(
           i->header, i->source, i->output, i->options->loop - 1);
       if (!gamdec_act_check(i, &out, count,
                             length + length_loop * (i->options->loop - 2))) {
-        if (count == length) {
-          application_print_message(i->options->source,
-                                    "Seek may have failed.");
+        if (errno != 0) {
+          application_print_message(i->options->source, strerror(errno));
         }
         break;
       }
       if (!gam_check_files(i, &out)) {
         break;
       }
+      errno = 0;
       if (gapcm_decode_seek(i->source, i->header->mark) != SUCCESS) {
         out = EXIT_FAILURE;
-        application_print_message(i->options->source, "Seek failed.");
+        application_print_message(i->options->source, strerror(errno));
         break;
       }
     }

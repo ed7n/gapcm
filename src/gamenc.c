@@ -11,7 +11,9 @@
 #include "common/constants.h"
 #include "gam.h"
 #include "gapcm/gapcm.h"
+#include <errno.h>
 #include <stdlib.h>
+#include <string.h>
 
 /** Usage syntax. */
 #define GAMENC_APPHELP_USAGE "Usage: -o <path> [<field>|<option>]... <file>"
@@ -84,16 +86,19 @@ int gamenc_act(struct GamInstance *i) {
         out = EXIT_FAILURE;
         application_print_message(i->options->output, GAM_ERROR_OUTPUT);
       }
-    } else if (fseek(i->output, 0, SEEK_SET) == SUCCESS) {
-      i->header->length = count / GAPCM_SECTOR_BLOCKS / channel_count;
-      if (gapcm_encode_header(i->header, sector) != GAPCM_SECTOR_SIZE) {
-        out = gamenc_error_header();
-        break;
-      }
-      fwrite(sector, 1, GAPCM_SECTOR_SIZE, i->output);
     } else {
-      out = EXIT_FAILURE;
-      application_print_message(i->options->output, "Seek failed.");
+      errno = 0;
+      if (fseek(i->output, 0, SEEK_SET) == SUCCESS) {
+        i->header->length = count / GAPCM_SECTOR_BLOCKS / channel_count;
+        if (gapcm_encode_header(i->header, sector) != GAPCM_SECTOR_SIZE) {
+          out = gamenc_error_header();
+          break;
+        }
+        fwrite(sector, 1, GAPCM_SECTOR_SIZE, i->output);
+      } else {
+        out = EXIT_FAILURE;
+        application_print_message(i->options->output, strerror(errno));
+      }
     }
     if ((i->options->trail || !i->options->has_length) && feof(i->source) &&
         !ferror(i->source)) {

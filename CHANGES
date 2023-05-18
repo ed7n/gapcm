@@ -2,12 +2,18 @@ GAPCM: Changes
 
 —Update 0
 
+——Revision 2, 05/18/2023.
+- Ignore some errors on flushing of input streams.
+  - Enable looping with older POSIX systems, specifically Android 11.
+- Improved seek failure support.
+- Note about `errno` on some GAPCM functions.
+
 ——Revision 1, 05/13/2023.
 - Decoder and encoder output completion checks.
+- Seek failure support.
 - Fixed failure exits on expected end-of-files.
 - Fixed non-release build command in README.
 - Removed remaking of IO context in `gapcm_decode_stream`.
-- Seek failure support.
 - Stringify header format field as channel count.
   - Updated reproducibility test to follow.
 - Unified project name to "GAPCM".
