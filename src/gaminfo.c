@@ -11,7 +11,6 @@
 #include "common/constants.h"
 #include "common/strings.h"
 #include "gam.h"
-#include "gapcm/gapcm.h"
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
@@ -115,15 +114,15 @@ int gaminfo_read(struct GamInstance *i) {
   if (!gam_open_source(i->options->source, &i->source, &out)) {
     return out;
   }
-  uint8_t *sector = malloc(GAPCM_SECTOR_SIZE);
+  uint8_t *sector = malloc(GAPCM_SECTOR_BYTES);
   while (true) {
     const char *error = NULL;
     if (i->source == stdin) {
       application_print_message(GAMINFO_APPINFO_NAME, GAM_INFO_LISTEN);
     }
-    i->read_count += fread(sector, 1, GAPCM_SECTOR_SIZE, i->source);
-    if (i->read_count != GAPCM_SECTOR_SIZE ||
-        gapcm_decode_header(sector, i->header) != GAPCM_SECTOR_SIZE) {
+    i->read_count += fread(sector, 1, GAPCM_SECTOR_BYTES, i->source);
+    if (i->read_count != GAPCM_SECTOR_BYTES ||
+        gapcm_decode_header(sector, i->header) != GAPCM_SECTOR_BYTES) {
       out = gam_error_header(i->options->source);
       break;
     }

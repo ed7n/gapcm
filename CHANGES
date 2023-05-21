@@ -2,8 +2,25 @@ GAPCM: Changes
 
 —Update 0
 
+——Revision 3, 05/21/2023.
+- `GAMplay` supplementary playback helper script.
+- `gapcm_decode_silence`.
+- Help text follows GAPCM configuration.
+- More ignoring `EBADF` on flushing of input streams.
+- Non-standard 16-bit support.
+  - Disabled by default.
+- Require loops to be at least one frame.
+  - Invalidates zero lengths.
+- Unit tests.
+- Fixed documentation at `gapcm_decode_sample`.
+  - [0x00, 0x7f] maps to [-1, -128] not [-128, -1].
+- Fixed encoding from signed samples.
+- Moved encoder default mark value to be closest to length.
+- Moved `GAPCM_BLOCK_SIZE` to `GAPCM_BLOCK_BYTES`.
+- Moved `GAPCM_SECTOR_SIZE` to `GAPCM_SECTOR_BYTES`.
+
 ——Revision 2, 05/18/2023.
-- Ignore some errors on flushing of input streams.
+- Ignore `EBADF` on flushing of input streams.
   - Enable looping with older POSIX systems, specifically Android 11.
 - Improved seek failure support.
 - Note about `errno` on some GAPCM functions.

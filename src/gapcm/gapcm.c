@@ -41,6 +41,9 @@ struct GaPcmIoContext {
   uint16_t CHANNEL_COUNT;
 };
 
+const unsigned char gapcm_origin[] = {0x7f, 0x80};
+const unsigned char gapcm_sample_origin[] = {0, GAPCM_SAMPLE_ORIGIN};
+
 /** Runs the given decode context for the given count of samples. */
 static unsigned long long gapcm_decode_context_for(struct GaPcmIoContext *c,
                                                    unsigned long long count) {
@@ -52,9 +55,9 @@ static unsigned long long gapcm_decode_context_for(struct GaPcmIoContext *c,
   while (!error && count >= c->CHANNEL_COUNT) {
     for (size_t channel = 0; !error && channel < c->CHANNEL_COUNT; channel++) {
       c->counts[channel] = gapcm_decode_sector(
-          c->sector, fread(c->sector, 1, GAPCM_SECTOR_SIZE, c->source),
-          &c->blocks[GAPCM_BLOCK_SIZE * channel]);
-      if (c->counts[channel] != GAPCM_BLOCK_SIZE) {
+          c->sector, fread(c->sector, 1, GAPCM_SECTOR_BYTES, c->source),
+          &c->blocks[GAPCM_BLOCK_BYTES * channel]);
+      if (c->counts[channel] != GAPCM_BLOCK_BYTES) {
         error = true;
       }
       if (c->counts[channel] > count / c->CHANNEL_COUNT) {
@@ -63,19 +66,19 @@ static unsigned long long gapcm_decode_context_for(struct GaPcmIoContext *c,
       c->indexes[channel] = 0;
     }
     for (size_t channel = 0;; channel = (channel + 1) % c->CHANNEL_COUNT) {
-      const unsigned char origin = GAPCM_SAMPLE_ORIGIN;
       const void *ptr;
       if (c->indexes[channel] < c->counts[channel]) {
-        ptr = &c->blocks[GAPCM_BLOCK_SIZE * channel + c->indexes[channel]++];
+        ptr = &c->blocks[GAPCM_BLOCK_BYTES * channel + c->indexes[channel]];
+        c->indexes[channel] += GAPCM_SAMPLE_BYTES;
       } else if (channel > 0) {
-        ptr = &origin;
+        ptr = &gapcm_sample_origin;
       } else {
         break;
       }
-      if (fwrite(ptr, 1, 1, c->output) != 1) {
+      if (fwrite(ptr, 1, GAPCM_SAMPLE_BYTES, c->output) != GAPCM_SAMPLE_BYTES) {
         return out;
       }
-      out++;
+      out += GAPCM_SAMPLE_BYTES;
     }
     count -= c->counts[0] * c->CHANNEL_COUNT;
   }
@@ -88,8 +91,8 @@ gapcm_decode_context_loop(struct GaPcmIoContext *context, int loop_count) {
     return 0;
   }
   unsigned long long length_loop =
-      context->header->length * context->CHANNEL_COUNT -
-      GAPCM_BLOCK_SIZE * context->header->mark;
+      GAPCM_SAMPLE_BYTES * context->header->length * context->CHANNEL_COUNT -
+      GAPCM_BLOCK_BYTES * context->header->mark;
   unsigned long long out = 0;
   while (true) {
     unsigned long long count_decode =
@@ -113,8 +116,8 @@ static unsigned long long gapcm_encode_context_for(struct GaPcmIoContext *c,
   unsigned long long out = 0;
   bool error = false;
   while (!error && count >= c->CHANNEL_COUNT) {
-    size_t count_block = count / c->CHANNEL_COUNT > GAPCM_BLOCK_SIZE
-                             ? GAPCM_BLOCK_SIZE
+    size_t count_block = count / c->CHANNEL_COUNT > GAPCM_BLOCK_BYTES
+                             ? GAPCM_BLOCK_BYTES
                              : count / c->CHANNEL_COUNT;
     for (size_t channel = 0; channel < c->CHANNEL_COUNT; channel++) {
       c->counts[channel] = 0;
@@ -122,27 +125,30 @@ static unsigned long long gapcm_encode_context_for(struct GaPcmIoContext *c,
     }
     for (size_t channel = 0; c->indexes[channel] < count_block;
          channel = (channel + 1) % c->CHANNEL_COUNT) {
-      if (fread(&c->blocks[GAPCM_BLOCK_SIZE * channel + c->indexes[channel]++],
-                1, 1, c->source) != 1) {
+      if (fread(&c->blocks[GAPCM_BLOCK_BYTES * channel + c->indexes[channel]],
+                1, GAPCM_SAMPLE_BYTES, c->source) != GAPCM_SAMPLE_BYTES) {
         error = true;
         break;
       }
-      c->counts[channel]++;
+      c->counts[channel] += GAPCM_SAMPLE_BYTES;
+      c->indexes[channel] += GAPCM_SAMPLE_BYTES;
     }
     for (size_t channel = 0;
          channel < c->CHANNEL_COUNT && c->counts[channel] > 0; channel++) {
-      for (size_t index = c->counts[channel]; index < GAPCM_BLOCK_SIZE;
-           index++) {
-        c->blocks[GAPCM_BLOCK_SIZE * channel + index] = GAPCM_SAMPLE_ORIGIN;
+      for (size_t index = c->counts[channel]; index < GAPCM_BLOCK_BYTES;
+           index += GAPCM_SAMPLE_BYTES) {
+        memcpy(&c->blocks[GAPCM_BLOCK_BYTES * channel + index],
+               &gapcm_sample_origin[GAPCM_SAMPLE_BYTES_PAD],
+               GAPCM_SAMPLE_BYTES);
       }
       count -= c->counts[channel];
       unsigned long count_write =
           fwrite(c->sector, 1,
-                 gapcm_encode_sector(&c->blocks[GAPCM_BLOCK_SIZE * channel],
-                                     GAPCM_BLOCK_SIZE, c->sector),
+                 gapcm_encode_sector(&c->blocks[GAPCM_BLOCK_BYTES * channel],
+                                     GAPCM_BLOCK_BYTES, c->sector),
                  c->output);
       out += count_write;
-      if (count_write / GAPCM_SECTOR_BLOCKS != GAPCM_BLOCK_SIZE) {
+      if (count_write / GAPCM_SECTOR_BLOCKS != GAPCM_BLOCK_BYTES) {
         return out;
       }
     }
@@ -167,12 +173,12 @@ gapcm_iocontext_make(const struct GaPcmHeader *header, FILE *restrict stream,
   struct GaPcmIoContext *out = malloc(sizeof(*out));
   out->CHANNEL_COUNT = gapcm_to_channelcount(header->format);
   out->blocks =
-      malloc(sizeof(*out->blocks) * GAPCM_BLOCK_SIZE * out->CHANNEL_COUNT);
+      malloc(sizeof(*out->blocks) * GAPCM_BLOCK_BYTES * out->CHANNEL_COUNT);
   out->counts = malloc(sizeof(*out->counts) * out->CHANNEL_COUNT);
   out->header = header;
   out->indexes = malloc(sizeof(*out->indexes) * out->CHANNEL_COUNT);
   out->output = output;
-  out->sector = malloc(sizeof(*out->sector) * GAPCM_SECTOR_SIZE);
+  out->sector = malloc(sizeof(*out->sector) * GAPCM_SECTOR_BYTES);
   out->source = stream;
   return out;
 }
@@ -191,7 +197,7 @@ size_t gapcm_decode_header(uint8_t *restrict sector,
   header->echo_delay = sector[17];
   memcpy(&(header->echo_levels), &sector[18], 3);
   header->pregap = sector[21];
-  return GAPCM_SECTOR_SIZE;
+  return GAPCM_SECTOR_BYTES;
 }
 
 unsigned long long gapcm_decode_loop(const struct GaPcmHeader *header,
@@ -203,18 +209,9 @@ unsigned long long gapcm_decode_loop(const struct GaPcmHeader *header,
   return out;
 }
 
-unsigned long long gapcm_decode_pregap(uint8_t pregap, FILE *restrict file) {
-  const unsigned char origin = GAPCM_SAMPLE_ORIGIN;
-  unsigned long long out = 0;
-  while (pregap-- > 0) {
-    for (size_t index = 0; index < GAPCM_BLOCK_SIZE; index++) {
-      if (fwrite(&origin, 1, 1, file) != 1) {
-        break;
-      }
-      out++;
-    }
-  }
-  return out;
+unsigned long long gapcm_decode_pregap(const uint8_t pregap,
+                                       FILE *restrict file) {
+  return gapcm_decode_silence(pregap * GAPCM_BLOCK_SAMPLES, file);
 }
 
 uint8_t gapcm_decode_sample(const uint8_t sample) {
@@ -225,13 +222,14 @@ uint8_t gapcm_decode_sample(const uint8_t sample) {
 size_t gapcm_decode_sector(const uint8_t *restrict sector, const size_t count,
                            uint8_t *restrict block) {
   size_t out = 0;
-  for (size_t offset = 1; offset < count; offset = ++out * 2 + 1) {
+  for (size_t offset = GAPCM_SAMPLE_BYTES_PAD; offset < count;
+       offset = ++out * GAPCM_SECTOR_BLOCKS + GAPCM_SAMPLE_BYTES_PAD) {
     block[out] = gapcm_decode_sample(sector[offset]);
   }
   return out;
 }
 
-#define GAPCM_OFFSET_MAXIMUM UINT32_MAX / GAPCM_SECTOR_SIZE
+#define GAPCM_OFFSET_MAXIMUM UINT32_MAX / GAPCM_SECTOR_BYTES
 int gapcm_decode_seek(FILE *restrict file, uint32_t position) {
   int errnoo = errno;
   int out = fflush(file);
@@ -245,26 +243,38 @@ int gapcm_decode_seek(FILE *restrict file, uint32_t position) {
     return out;
 #endif
   }
-  out = fseek(file, GAPCM_SECTOR_SIZE, SEEK_SET);
+  out = fseek(file, GAPCM_SECTOR_BYTES, SEEK_SET);
   if (out != GAPCM_SUCCESS) {
     return out;
   }
   while (position >= GAPCM_OFFSET_MAXIMUM) {
-    out = fseek(file, GAPCM_SECTOR_SIZE * GAPCM_OFFSET_MAXIMUM, SEEK_CUR);
+    out = fseek(file, GAPCM_SECTOR_BYTES * GAPCM_OFFSET_MAXIMUM, SEEK_CUR);
     if (out != GAPCM_SUCCESS) {
       return out;
     }
     position -= GAPCM_OFFSET_MAXIMUM;
   }
-  return fseek(file, GAPCM_SECTOR_SIZE * position, SEEK_CUR);
+  return fseek(file, GAPCM_SECTOR_BYTES * position, SEEK_CUR);
 }
 #undef GAPCM_OFFSET_MAXIMUM
+
+unsigned long long gapcm_decode_silence(uint32_t count, FILE *restrict file) {
+  unsigned long long out = 0;
+  while (count-- > 0) {
+    if (fwrite(&gapcm_sample_origin[GAPCM_SAMPLE_BYTES_PAD], 1,
+               GAPCM_SAMPLE_BYTES, file) != GAPCM_SAMPLE_BYTES) {
+      break;
+    }
+    out += GAPCM_SAMPLE_BYTES;
+  }
+  return out;
+}
 
 unsigned long long gapcm_decode_stream(const struct GaPcmHeader *header,
                                        FILE *restrict source,
                                        FILE *restrict output, int loop_count) {
   struct GaPcmIoContext *context = gapcm_iocontext_make(header, source, output);
-  unsigned long long mark = GAPCM_BLOCK_SIZE * context->header->mark;
+  unsigned long long mark = GAPCM_BLOCK_BYTES * context->header->mark;
   unsigned long long out = gapcm_decode_context_for(context, mark);
   if (out == mark) {
     out += gapcm_decode_context_loop(context, loop_count);
@@ -296,23 +306,44 @@ size_t gapcm_encode_header(struct GaPcmHeader *header, uint8_t *sector) {
   sector[17] = header->echo_delay;
   memcpy(&sector[18], &(header->echo_levels), 3);
   sector[21] = header->pregap;
-  for (size_t index = 22; index < GAPCM_SECTOR_SIZE; index++) {
+  for (size_t index = 22; index < GAPCM_SECTOR_BYTES; index++) {
     sector[index] = 0;
   }
-  return GAPCM_SECTOR_SIZE;
+  return GAPCM_SECTOR_BYTES;
 }
 
 uint8_t gapcm_encode_sample(const uint8_t sample) {
-  return sample & 0x80 ? 0x80 | (sample - GAPCM_SAMPLE_ORIGIN)
-                       : 0x7f & (GAPCM_SAMPLE_ORIGIN - sample - 1);
+  // Unsigned:
+  //   127 -> 0x00:
+  //     (127 - 128 = 255) & 0x80 ? 127 - (127 & 0x7f = 127) =   0 = 0x00
+  //     0 -> 0x7f:
+  //     (  0 - 128 = 127) & 0x80 ? 127 - (  0 & 0x7f =   0) = 127 = 0x7f
+  //   128 -> 0x80:
+  //     (128 - 128 =   0) & 0x80 : 128 - 128 + 128 = 128 = 0x80
+  //   255 -> 0xff:
+  //     (255 - 128 = 127) & 0x80 : 255 - 128 + 128 = 255 = 0xff
+  // Signed:
+  //     -1 -> 0x00:
+  //     (  -1 - 0 =   -1) & 0x80 ? 127 - (  -1 & 0x7f = 127) =   0 = 0x00
+  //   -128 -> 0x7f:
+  //     (-128 - 0 = -128) & 0x80 ? 127 - (-128 & 0x7f =   0) = 127 = 0x7f
+  //      0 -> 0x80:
+  //     (   0 - 0 =    0) & 0x80 :   0 - 0 + 128 = 128 = 0x80
+  //    127 -> 0xff:
+  //     ( 127 - 0 =  127) & 0x80 : 127 - 0 + 128 = 255 = 0xff
+  return (sample - GAPCM_SAMPLE_ORIGIN) & 0x80
+             ? 127 - (sample & 0x7f)
+             : sample - GAPCM_SAMPLE_ORIGIN + 128;
 }
 
-size_t gapcm_encode_sector(const uint8_t *restrict pointer, const size_t count,
-                           uint8_t *restrict block) {
+size_t gapcm_encode_sector(const uint8_t *restrict block, const size_t count,
+                           uint8_t *restrict sector) {
   size_t out = 0;
-  for (size_t index = 0; index < count; out = ++index * 2) {
-    block[out] = 0;
-    block[out + 1] = gapcm_encode_sample(pointer[index]);
+  for (size_t index = 0; index < count; out = ++index * GAPCM_SECTOR_BLOCKS) {
+#if GAPCM_SAMPLE_BYTES_PAD == 1
+    sector[out] = 0;
+#endif
+    sector[out + GAPCM_SAMPLE_BYTES_PAD] = gapcm_encode_sample(block[index]);
   }
   return out;
 }
@@ -342,16 +373,22 @@ bool gapcm_header_check(const struct GaPcmHeader *header, const char **error) {
     }
     return false;
   }
-  uint16_t block_frames = GAPCM_BLOCK_SIZE / channel_count;
+  if (header->length == 0) {
+    if (error != NULL) {
+      *error = GAPCM_ERROR_LENGTH;
+    }
+    return false;
+  }
+  uint16_t block_frames = GAPCM_BLOCK_SAMPLES / channel_count;
   if (header->mark > UINT32_MAX / block_frames) {
     if (error != NULL) {
       *error = GAPCM_ERROR_MARK;
     }
     return false;
   }
-  if (header->length / block_frames < header->mark) {
+  if (header->length / block_frames <= header->mark) {
     if (error != NULL) {
-      *error = GAPCM_ERROR_LENGTH;
+      *error = GAPCM_ERROR_LOOP;
     }
     return false;
   }

@@ -10,6 +10,7 @@ OUTPUT := build
 SOURCE := src
 
 all: gamdec gamenc gaminfo
+check: gamtest
 
 mingw-w64: CC := x86_64-w64-mingw32-gcc
 mingw-w64: LDLIBS := -l ws2_32
@@ -18,10 +19,12 @@ mingw-w64 release: all
 
 .SECONDEXPANSION:
 
-gamdec gamenc gaminfo: $(foreach object, $$@ gapcm/gapcm gam \
+gamdec gamenc gaminfo gamtest:: $(foreach object, $$@ gapcm/gapcm gam \
 		$(foreach object, application strings strtonum, \
 		common/${object}), ${OUTPUT}/${object}.o)
 	${CC} ${CFLAGS} ${GMFC_CFLAGS} ${CPPFLAGS} ${GMFC_CPPFLAGS} ${GMFC_LDFLAGS} \
 			-o $@ $^ ${LDLIBS}
+gamtest::
+		./$@
 
 include ${SOURCE}/GMFC.mk

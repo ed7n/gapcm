@@ -161,9 +161,6 @@ int gam_parse_info(struct ApplicationParseContext *context,
 int gam_parse_length(struct ApplicationParseContext *context,
                      struct GamOptions *options);
 
-int gam_parse_loop(struct ApplicationParseContext *context,
-                   struct GamOptions *options);
-
 int gam_parse_mark(struct ApplicationParseContext *context,
                    struct GamOptions *options);
 

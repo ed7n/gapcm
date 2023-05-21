@@ -10,6 +10,10 @@
 
     $ make mingw-w64
 
+## Unit Testing
+
+    $ make check
+
 ## Formatting
 
     $ unset files && for file in $(find 'src' -regextype 'egrep' -iregex '.*\.(c|h)'); do files+=("${file}"); done && clang-format -i "${files[@]}"

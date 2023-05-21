@@ -10,7 +10,6 @@
 #include "common/application.h"
 #include "common/constants.h"
 #include "gam.h"
-#include "gapcm/gapcm.h"
 #include <errno.h>
 #include <stdlib.h>
 #include <string.h>
@@ -33,7 +32,8 @@ Header Fields:\n\
                             Echo levels for channel pairs 3 and 4 to 7 and 8.\n\
   -ep, --echo-pregap <ticks>\n\
                             First echo delay.\n\
-  -m,  --mark <blocks>      Loop start position. Default is `0`.\n\
+  -m,  --mark <blocks>      Loop start position. Default follows the length for\n\
+                            the shortest possible loop.\n\
   -n,  --length <frames>    Length between stream start and loop end. `-1` for\n\
                             maximum. Default is automatic.\n\
   -p,  --pregap <blocks>    Artificial silence length. Default is `0`.\n\
@@ -41,7 +41,8 @@ Header Fields:\n\
 Options:\n\
   -t, --trail               Include samples after the loop end.\n\
 \n\
-The input file must be headerless, unsigned 8-bit PCM. Echo header fields\n\
+The input file must be headerless, " APPHELP_SIGNEDNESS SPACE                  \
+      APPHELP_BIT_COUNT "-bit PCM. Echo header fields\n\
 default to zero which disables the feature. See the prober for details on\n\
 units.\n" APPHELP_EXPLANATION
 /** Application name. */
@@ -56,50 +57,60 @@ int gamenc_error_header(void) {
 
 int gamenc_act(struct GamInstance *i) {
   int out = EXIT_SUCCESS;
-  uint8_t *sector = malloc(GAPCM_SECTOR_SIZE);
+  uint8_t *sector = malloc(GAPCM_SECTOR_BYTES);
   while (true) {
+    uint16_t channel_count = gapcm_to_channelcount(i->header->format);
     if (i->source == stdin) {
       application_print_message(GAMENC_APPINFO_NAME, GAM_INFO_LISTEN);
     }
-    if (gapcm_encode_header(i->header, sector) != GAPCM_SECTOR_SIZE) {
+    if (gapcm_encode_header(i->header, sector) != GAPCM_SECTOR_BYTES) {
       out = gamenc_error_header();
       break;
     }
-    i->write_count += fwrite(sector, 1, GAPCM_SECTOR_SIZE, i->output);
-    if (i->write_count != GAPCM_SECTOR_SIZE) {
+    if (fwrite(sector, 1, GAPCM_SECTOR_BYTES, i->output) !=
+        GAPCM_SECTOR_BYTES) {
       break;
     }
-    unsigned long long count =
+    i->write_count +=
         i->options->trail
             ? gapcm_encode_stream_for(i->header, i->source, i->output,
                                       UINT32_MAX)
             : gapcm_encode_stream(i->header, i->source, i->output);
-    uint16_t channel_count = gapcm_to_channelcount(i->header->format);
-    i->write_count += count;
     if (i->options->has_length) {
       unsigned long long comparand =
           i->header->length * channel_count * GAPCM_SECTOR_BLOCKS;
-      comparand = comparand - comparand % GAPCM_SECTOR_SIZE +
-                  GAPCM_SECTOR_SIZE *
-                      (comparand % GAPCM_SECTOR_SIZE > 0 ? channel_count : 0);
-      if (i->options->trail ? count < comparand : count != comparand) {
+      comparand = comparand - comparand % GAPCM_SECTOR_BYTES +
+                  GAPCM_SECTOR_BYTES *
+                      (comparand % GAPCM_SECTOR_BYTES > 0 ? channel_count : 0);
+      if (i->options->trail ? i->write_count < comparand
+                            : i->write_count != comparand) {
         out = EXIT_FAILURE;
         application_print_message(i->options->output, GAM_ERROR_OUTPUT);
       }
     } else {
       errno = 0;
       if (fseek(i->output, 0, SEEK_SET) == SUCCESS) {
-        i->header->length = count / GAPCM_SECTOR_BLOCKS / channel_count;
-        if (gapcm_encode_header(i->header, sector) != GAPCM_SECTOR_SIZE) {
+        i->header->length = i->write_count / GAPCM_SAMPLE_BYTES /
+                            GAPCM_SECTOR_BLOCKS / channel_count;
+        if (!i->options->has_mark) {
+          i->header->mark =
+              i->header->length < (GAPCM_BLOCK_SAMPLES / channel_count)
+                  ? 0
+                  : i->header->length / (GAPCM_BLOCK_SAMPLES / channel_count) -
+                        1;
+        }
+        if (gapcm_encode_header(i->header, sector) != GAPCM_SECTOR_BYTES) {
           out = gamenc_error_header();
           break;
         }
-        fwrite(sector, 1, GAPCM_SECTOR_SIZE, i->output);
+        fwrite(sector, 1, GAPCM_SECTOR_BYTES, i->output);
       } else {
         out = EXIT_FAILURE;
         application_print_message(i->options->output, strerror(errno));
       }
     }
+    // XXX: Header write occured much earlier.
+    i->write_count += GAPCM_SECTOR_BYTES;
     if ((i->options->trail || !i->options->has_length) && feof(i->source) &&
         !ferror(i->source)) {
       clearerr(i->source);
@@ -156,8 +167,12 @@ int gamenc_read(struct GamInstance *i) {
     h->echo_pregap = o->has_echo_pregap ? o->echo_pregap : 0;
     h->format =
         o->has_channels ? gapcm_to_format(o->channels) : GAPCM_FORMAT_MONO;
+    uint16_t channel_count = gapcm_to_channelcount(h->format);
     h->length = o->has_length ? o->length : UINT32_MAX;
-    h->mark = o->has_mark ? o->mark : 0;
+    h->mark = o->has_mark ? o->mark
+              : h->length < (GAPCM_BLOCK_SAMPLES / channel_count)
+                  ? 0
+                  : h->length / (GAPCM_BLOCK_SAMPLES / channel_count) - 1;
     h->pregap = o->has_pregap ? o->pregap : 0;
     if (!gapcm_header_check(h, &error)) {
       out = EXIT_FAILURE;

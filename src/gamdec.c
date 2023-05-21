@@ -10,7 +10,6 @@
 #include "common/application.h"
 #include "common/constants.h"
 #include "gam.h"
-#include "gapcm/gapcm.h"
 #include <errno.h>
 #include <stdlib.h>
 #include <string.h>
@@ -25,7 +24,8 @@
 #define GAMDEC_APPHELP_EXPLANATION                                             \
   "\
 Where:\n\
-  -o, --output <path>     Path to output headerless, unsigned 8-bit PCM file.\n\
+  -o, --output <path>     Path to output headerless, " APPHELP_SIGNEDNESS      \
+      SPACE APPHELP_BIT_COUNT "-bit PCM file.\n\
                           `-` for pipe.\n\
 Header Overrides:\n\
   -c, --channels {1|2}    1: mono, 2: stereo.\n\
@@ -46,6 +46,18 @@ prober and apply them elsewhere. Also look there for details on units.\n" APPHEL
 /** Usage syntax. */
 #define GAMDEC_APPHELP_USAGE "Usage: -o <path> [<override>|<option>]... <file>"
 
+int gamdec_parse_loop(struct ApplicationParseContext *c,
+                      struct GamOptions *options) {
+  long long number;
+  int out =
+      application_parse_integer(c, &number, -1, UINT16_MAX, "[-1, 65535]");
+  if (out == EXIT_SUCCESS) {
+    options->loop = number;
+    options->has_loop = true;
+  }
+  return out;
+}
+
 bool gamdec_act_check(struct GamInstance *i, int *success,
                       const unsigned long long count,
                       const unsigned long long comparand) {
@@ -61,10 +73,10 @@ bool gamdec_act_check(struct GamInstance *i, int *success,
 int gamdec_act(struct GamInstance *i) {
   int out = EXIT_SUCCESS;
   i->write_count += gapcm_decode_pregap(i->header->pregap, i->output);
-  while (i->write_count == GAPCM_BLOCK_SIZE * i->header->pregap) {
-    unsigned long long mark = GAPCM_BLOCK_SIZE * i->header->mark;
-    unsigned long long length =
-        i->header->length * gapcm_to_channelcount(i->header->format);
+  while (i->write_count == GAPCM_BLOCK_BYTES * i->header->pregap) {
+    unsigned long long mark = GAPCM_BLOCK_BYTES * i->header->mark;
+    unsigned long long length = GAPCM_SAMPLE_BYTES * i->header->length *
+                                gapcm_to_channelcount(i->header->format);
     unsigned long long length_loop = length - mark;
     if (i->options->loop > 1) {
       errno = 0;
@@ -143,7 +155,7 @@ int gamdec_read(struct GamInstance *i) {
   }
   struct GaPcmHeader *h = i->header;
   struct GamOptions *o = i->options;
-  uint8_t *sector = malloc(GAPCM_SECTOR_SIZE);
+  uint8_t *sector = malloc(GAPCM_SECTOR_BYTES);
   while (true) {
     const char *error = NULL;
     if (i->source == stdin) {
@@ -154,9 +166,9 @@ int gamdec_read(struct GamInstance *i) {
       }
       application_print_message(GAMDEC_APPINFO_NAME, GAM_INFO_LISTEN);
     }
-    i->read_count += fread(sector, 1, GAPCM_SECTOR_SIZE, i->source);
-    if (i->read_count != GAPCM_SECTOR_SIZE ||
-        gapcm_decode_header(sector, h) != GAPCM_SECTOR_SIZE) {
+    i->read_count += fread(sector, 1, GAPCM_SECTOR_BYTES, i->source);
+    if (i->read_count != GAPCM_SECTOR_BYTES ||
+        gapcm_decode_header(sector, h) != GAPCM_SECTOR_BYTES) {
       out = gam_error_header(o->source);
       break;
     }
@@ -220,7 +232,7 @@ int main(int argument_count, char *arguments[]) {
   struct GamOption **options = malloc(sizeof(options) * GAMDEC_OPTION_COUNT);
   options[0] = gam_option_make("-c", "--channels", gam_parse_channels);
   options[1] = gam_option_make("-i", "--info", gam_parse_info);
-  options[2] = gam_option_make("-l", "--loop", gam_parse_loop);
+  options[2] = gam_option_make("-l", "--loop", gamdec_parse_loop);
   options[3] = gam_option_make("-m", "--mark", gam_parse_mark);
   options[4] = gam_option_make("-n", "--length", gam_parse_length);
   options[5] = gam_option_make("-o", "--output", gam_parse_output);

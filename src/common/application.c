@@ -1,3 +1,10 @@
+/**
+ * Undo setting of `errno` to `EBADF` on `fflush`. Flushing input streams is
+ * undefined on older POSIX systems where `EBADF` may be set. This is defined by
+ * default for compatibility and should be undefined for debugging.
+ */
+#define APPLICATION_FFLUSH_EBADF
+
 #include "application.h"
 #include "constants.h"
 #include "strings.h"
@@ -38,6 +45,12 @@ int application_file_close(FILE *file, const char *restrict name) {
     if (fflush(file) == SUCCESS) {
       return EXIT_SUCCESS;
     }
+#ifdef APPLICATION_FFLUSH_EBADF
+    if (file == stdin && errno == EBADF) {
+      errno = SUCCESS;
+      return EXIT_SUCCESS;
+    }
+#endif
   } else if (fclose(file) == SUCCESS) {
     return EXIT_SUCCESS;
   }

@@ -205,18 +205,6 @@ int gam_parse_length(struct ApplicationParseContext *c,
   return out;
 }
 
-int gam_parse_loop(struct ApplicationParseContext *c,
-                   struct GamOptions *options) {
-  long long number;
-  int out =
-      application_parse_integer(c, &number, -1, UINT16_MAX, "[-1, 65535]");
-  if (out == EXIT_SUCCESS) {
-    options->loop = number;
-    options->has_loop = true;
-  }
-  return out;
-}
-
 int gam_parse_mark(struct ApplicationParseContext *c,
                    struct GamOptions *options) {
   long long number;

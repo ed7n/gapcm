@@ -1,17 +1,26 @@
 /**
- * GAPCM: Header model and transcode functions.
+ * GAPCM: Header Model + Transcode Functions
  *
  * File operators start from the current position and--unless otherwise
  * mentioned--return their count of output bytes. Those that flush and
- * seek--either for looping or `gapcm_decode_seek`--set `errno` on error. For
- * PCM transcodes from and to signed 8-bit, change `GAPCM_SAMPLE_ORIGIN` to `0`.
- * `0x80` for unsigned. Consumer PCM refers to PCM of this format.
+ * seek--for either looping or `gapcm_decode_seek` otherwise--set `errno` on
+ * error. For PCM transcodes from and to signed 8-bit, set `GAPCM_SAMPLE_ORIGIN`
+ * to `0`, `0x80` for unsigned. Consumer PCM refers to PCM of this format.
+ *
+ * In a game PCM file, each 8-bit sample is preceded by eight padding bits.
+ * GAPCM can use the latter to double the sample resolution while retaining
+ * compatibility. The resulting consumer PCM should be unsigned little-endian
+ * 16-bit, so `GAPCM_SAMPLE_ORIGIN` should be set to `0x80`. This non-standard
+ * extension can be enabled by setting `GAPCM_SAMPLE_BYTES` to `2`, and sample
+ * transcode functions must be called twice for each 16-bit sample.
  *
  * GA is short for GAME ARTS Co., Ltd.
  */
 #ifndef _GAPCM_H
 #define _GAPCM_H
 
+/** Sample size in bytes. */
+#define GAPCM_SAMPLE_BYTES 1
 /** Consumer PCM sample origin. */
 #define GAPCM_SAMPLE_ORIGIN 0x80
 
@@ -19,22 +28,27 @@
 #include <stdint.h>
 #include <stdio.h>
 
-/** Block size in bytes. Must be half of sector's. */
-#define GAPCM_BLOCK_SIZE 1024
+/** Block size in bytes. */
+#define GAPCM_BLOCK_BYTES (GAPCM_SAMPLE_BYTES * 1024)
+/** Block size in samples. */
+#define GAPCM_BLOCK_SAMPLES (GAPCM_BLOCK_BYTES / GAPCM_SAMPLE_BYTES)
 /** Mono stream format. */
 #define GAPCM_FORMAT_MONO 2
 /** Stereo stream format. */
 #define GAPCM_FORMAT_STEREO 1
 /** Maximum count of char units needed for header stringification. */
 #define GAPCM_HEADER_STRING_CAPACITY 198
+/** Sample padding size in bytes. */
+#define GAPCM_SAMPLE_BYTES_PAD (2 - GAPCM_SAMPLE_BYTES)
 /** Sector size in bytes. */
-#define GAPCM_SECTOR_SIZE 2048
-/** Two blocks in a sector. */
-#define GAPCM_SECTOR_BLOCKS (GAPCM_SECTOR_SIZE / GAPCM_BLOCK_SIZE)
+#define GAPCM_SECTOR_BYTES 2048
+/** Count of blocks in a sector. */
+#define GAPCM_SECTOR_BLOCKS (GAPCM_SECTOR_BYTES / GAPCM_BLOCK_BYTES)
 
 #define GAPCM_ERROR_FORMAT "The format is invalid."
-#define GAPCM_ERROR_LENGTH                                                     \
-  "The stream length is less than the loop start position."
+#define GAPCM_ERROR_LENGTH "The length is zero."
+#define GAPCM_ERROR_LOOP                                                       \
+  "The stream length is less than or equal to the loop start position."
 #define GAPCM_ERROR_MARK                                                       \
   "The loop start position is more than the logical maximum."
 
@@ -61,9 +75,15 @@ struct GaPcmHeader {
   uint8_t pregap;
 };
 
+/** Game PCM origin 16-bit sample in little-endian order. */
+extern const unsigned char gapcm_origin[];
+
+/** Consumer PCM origin 16-bit sample in little-endian order. */
+extern const unsigned char gapcm_sample_origin[];
+
 /**
  * Decodes a header from the given sector to the given model and returns
- * `GAPCM_SECTOR_SIZE` on success.
+ * `GAPCM_SECTOR_BYTES` on success.
  */
 size_t gapcm_decode_header(uint8_t *sector, struct GaPcmHeader *header);
 
@@ -73,17 +93,17 @@ unsigned long long gapcm_decode_loop(const struct GaPcmHeader *header,
                                      int loop_count);
 
 /** Writes the given count of silent blocks to the given file. */
-unsigned long long gapcm_decode_pregap(uint8_t pregap, FILE *file);
+unsigned long long gapcm_decode_pregap(const uint8_t pregap, FILE *file);
 
 /**
- * Translates the given GAPCM sign–magnitude sample. [0x00, 0x7f] maps to [-128,
- * -1], and [0x80, 0xff] to [0, 127]. The returned format depends on
+ * Translates the given GAPCM sign–magnitude sample. [0x00, 0x7f] maps to [-1,
+ * -128], and [0x80, 0xff] to [0, 127]. The returned format depends on
  * `GAPCM_SAMPLE_ORIGIN`.
  */
 uint8_t gapcm_decode_sample(uint8_t sample);
 
 /**
- * Decodes the given sector to the given block and returns `GAPCM_SECTOR_SIZE`
+ * Decodes the given sector to the given block and returns `GAPCM_SECTOR_BYTES`
  * on success.
  */
 size_t gapcm_decode_sector(const uint8_t *sector, size_t count, uint8_t *block);
@@ -93,6 +113,9 @@ size_t gapcm_decode_sector(const uint8_t *sector, size_t count, uint8_t *block);
  * its success.
  */
 int gapcm_decode_seek(FILE *file, uint32_t position);
+
+/** Writes the given count of silent samples to the given file. */
+unsigned long long gapcm_decode_silence(uint32_t count, FILE *file);
 
 /** Decodes the given stream defined by the given header to the given output. */
 unsigned long long gapcm_decode_stream(const struct GaPcmHeader *header,
@@ -105,7 +128,7 @@ unsigned long long gapcm_decode_stream_for(const struct GaPcmHeader *header,
                                            uint32_t count);
 
 /**
- * Encodes the given header to the given sector and returns `GAPCM_SECTOR_SIZE`
+ * Encodes the given header to the given sector and returns `GAPCM_SECTOR_BYTES`
  * on success.
  */
 size_t gapcm_encode_header(struct GaPcmHeader *header, uint8_t *sector);
