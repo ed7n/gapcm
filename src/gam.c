@@ -122,10 +122,20 @@ struct GamOptions *gam_options_free(struct GamOptions *o) {
 }
 
 struct GamOptions *gam_options_make(void) {
-  // XXX: Assumes that `false` is 0.
   struct GamOptions *out = calloc(1, sizeof(*out));
   out->output = NULL;
   out->source = NULL;
+  out->has_channels = false;
+  out->has_echo_delay = false;
+  out->has_echo_levels = false;
+  out->has_echo_pans = false;
+  out->has_echo_pregap = false;
+  out->has_length = false;
+  out->has_loop = false;
+  out->has_mark = false;
+  out->has_pregap = false;
+  out->info = false;
+  out->trail = false;
   return out;
 }
 

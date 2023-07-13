@@ -8,6 +8,9 @@
 
 #include <stdbool.h>
 
+/** Safely performs the given assignment. */
+void string_assign(const char **assignee, const char *assigner);
+
 /** Returns whether the given string is equal to the given comparand. */
 bool string_equals(const char *string, const char *comparand);
 

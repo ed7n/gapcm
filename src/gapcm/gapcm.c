@@ -183,6 +183,14 @@ gapcm_iocontext_make(const struct GaPcmHeader *header, FILE *restrict stream,
   return out;
 }
 
+/** Safely performs the given assignment. */
+static void gapcm_string_assign(const char **restrict assignee,
+                                const char *restrict assigner) {
+  if (assignee != NULL) {
+    *assignee = assigner;
+  }
+}
+
 size_t gapcm_decode_header(uint8_t *restrict sector,
                            struct GaPcmHeader *header) {
   // Address alignment.
@@ -368,28 +376,20 @@ unsigned long long gapcm_encode_stream_for(const struct GaPcmHeader *header,
 bool gapcm_header_check(const struct GaPcmHeader *header, const char **error) {
   uint16_t channel_count = gapcm_to_channelcount(header->format);
   if (channel_count == 0) {
-    if (error != NULL) {
-      *error = GAPCM_ERROR_FORMAT;
-    }
+    gapcm_string_assign(error, GAPCM_ERROR_FORMAT);
     return false;
   }
   if (header->length == 0) {
-    if (error != NULL) {
-      *error = GAPCM_ERROR_LENGTH;
-    }
+    gapcm_string_assign(error, GAPCM_ERROR_LENGTH);
     return false;
   }
   uint16_t block_frames = GAPCM_BLOCK_SAMPLES / channel_count;
   if (header->mark > UINT32_MAX / block_frames) {
-    if (error != NULL) {
-      *error = GAPCM_ERROR_MARK;
-    }
+    gapcm_string_assign(error, GAPCM_ERROR_MARK);
     return false;
   }
   if (header->length / block_frames <= header->mark) {
-    if (error != NULL) {
-      *error = GAPCM_ERROR_LOOP;
-    }
+    gapcm_string_assign(error, GAPCM_ERROR_LOOP);
     return false;
   }
   return true;

@@ -22,6 +22,13 @@ static bool string_equals_allany(const char *string, const bool preset,
   return preset;
 }
 
+void string_assign(const char **restrict assignee,
+                   const char *restrict assigner) {
+  if (assignee != NULL) {
+    *assignee = assigner;
+  }
+}
+
 bool string_equals(const char *restrict string,
                    const char *restrict comparand) {
   return strcmp(string, comparand) == SUCCESS;
