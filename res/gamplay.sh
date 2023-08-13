@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# GAMplay u0r0 by Brendon, 05/21/2023.
+# GAMplay u0r1 by Brendon, 08/12/2023.
 # ——GAPCM playback helper. https://ed7n.github.io/gapcm
 
 # Decoder executable.
@@ -9,7 +9,7 @@ readonly GAM_DEC='./gamdec'
 readonly GAM_FID='0.0795'
 # Fade out duration in seconds.
 readonly GAM_FOD=10
-# Loop count.
+# Loop count excluding fade out.
 readonly GAM_LOC=6
 # Loop activation threshold in seconds.
 readonly GAM_LOT=7
@@ -35,6 +35,14 @@ type "${GAM_PRB}" &> /dev/null || GAM.die '`'"${GAM_PRB}"'` not found.'
 (( ${#} )) || GAM.die 'No file.'
 [ -e "${1}" ] || GAM.die 'Not found.'
 [ -r "${1}" ] || GAM.die 'No read permission.'
+case $(( ($("${GAM_PRB}" -bf) + 1) % 2 )) in
+  0 )
+    gamFmt='u16le' ;;
+  1 )
+    gamFmt='u8' ;;
+  * )
+    GAM.die 'Bad build flags.' ;;
+esac
 for gamFld in $("${GAM_PRB}" "${1}" | cut -d ':' -f 2 -s); do
   gamFlds+=("${gamFld}")
 done
@@ -68,5 +76,5 @@ gamAfc+='channelmap='"${gamCnm}"','
 gamAfc+='lowpass='"${gamLpc}"':p=1,lowpass='"${gamLpc}"':p=1,'
 echo 'Now playing in '"${gamOpr}"' mode.'
 "${GAM_DEC}" -p 0 -l "${gamLoc}" -o '-' "${1}" | ffplay -autoexit -loglevel \
-    'warning' -f 'u8' -ac "${gamCnl}" -ar "${gamRat}" -af "${gamAfc:0:-1}" '-' \
-    && echo 'Done.'
+    'warning' -f "${gamFmt}" -ac "${gamCnl}" -ar "${gamRat}" -af \
+    "${gamAfc:0:-1}" '-' && echo 'Done.'

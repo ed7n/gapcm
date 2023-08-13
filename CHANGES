@@ -2,12 +2,17 @@ GAPCM: Changes
 
 —Update 0
 
+——Revision 5, 08/13/2023.
+- Prober: `--build-flags`.
+-- Updated playback helper to match output format with sample byte count.
+- Fixed misspaced help text for the prober's `--mark`.
+
 ——Revision 4, 07/13/2023.
 - No user-observable changes.
 - Variablized conditional string assignments.
 
 ——Revision 3, 05/21/2023.
-- `GAMplay` supplementary playback helper script.
+- GAMplay supplementary playback helper script.
 - `gapcm_decode_silence`.
 - Help text follows GAPCM configuration.
 - More ignoring `EBADF` on flushing of input streams.

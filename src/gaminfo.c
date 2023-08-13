@@ -16,7 +16,7 @@
 #include <time.h>
 
 /** Usage syntax. */
-#define GAMINFO_APPHELP_USAGE "Usage: [<field>] <file>"
+#define GAMINFO_APPHELP_USAGE "Usage: ([<field>] <file>) | -bf"
 /** Explanation to syntax. */
 #define GAMINFO_APPHELP_EXPLANATION                                            \
   "\
@@ -27,12 +27,17 @@ Header Fields:\n\
   -ed, --echo-delay   Echo delay in ticks.\n\
   -el, --echo-levels  Echo levels for channel pairs 3 and 4 to 7 and 8.\n\
   -ep, --echo-pregap  First echo delay in ticks.\n\
-  -m,  --mark       Loop start position in blocks.\n\
+  -m,  --mark         Loop start position in blocks.\n\
   -n,  --length       Length between stream start and loop end in frames.\n\
   -p,  --pregap       Artificial silence length in blocks.\n\
 \n\
-If none is given, then it prints the header in a friendly format. A block spans\n\
-1024 samples, a frame spans one sample for mono, two for stereo.\n" APPHELP_EXPLANATION
+If none is given, then it prints the header in a friendly format.\n\
+\n\
+Build Information:\n\
+  -bf, --build-flags  1: 16-bit extension enabled, 0: otherwise.\n\
+\n\
+A block spans 1024 samples, a frame spans one sample for mono, two for stereo.\n\
+" APPHELP_EXPLANATION
 /** Application name. */
 #define GAMINFO_APPINFO_NAME APPINFO_NAME "info"
 /** Application description. */
@@ -56,7 +61,9 @@ int gaminfo_act(struct GamInstance *i) {
   struct GaPcmHeader *h = i->header;
   char *o = i->options->output;
   int out = -1;
-  if (o == NULL) {
+  if (i->options->has_mark) {
+    out = printf("%u%s", GAPCM_SAMPLE_BYTES == 2 ? 1 : 0, EOL);
+  } else if (o == NULL) {
     char string[GAPCM_HEADER_STRING_CAPACITY];
     gapcm_header_stringify(h, string);
     out = puts(string);
@@ -89,6 +96,13 @@ int gaminfo_done(struct GamInstance *i) {
 
 int gaminfo_parse_option(struct ApplicationParseContext *c,
                          struct GamOptions *options) {
+  // GamOptions repurposing:
+  // `has_mark` Build flags present?
+  // `length`   Count of parsed options minus one.
+  // `output`   A copy of the most recent option.
+  if (string_equals_any(c->option, 2, "-bf", "--build-flags")) {
+    options->has_mark = true;
+  }
   options->length = options->output != NULL ? options->length + 1 : 0;
   options->output = realloc(options->output, strlen(c->option) + 1);
   strcpy(options->output, c->option);
@@ -110,6 +124,9 @@ int gaminfo_help(void) {
 }
 
 int gaminfo_read(struct GamInstance *i) {
+  if (i->options->has_mark) {
+    return i->options->length > 0 ? gaminfo_error_options() : EXIT_SUCCESS;
+  }
   int out;
   if (!gam_open_source(i->options->source, &i->source, &out)) {
     return out;
@@ -139,7 +156,7 @@ int gaminfo_read(struct GamInstance *i) {
   return out;
 }
 
-#define GAMINFO_OPTION_COUNT 8
+#define GAMINFO_OPTION_COUNT 9
 /** The main method is the entry point to this application. */
 int main(int argument_count, char *arguments[]) {
   if (argument_count < 2) {
@@ -159,6 +176,7 @@ int main(int argument_count, char *arguments[]) {
   options[5] = gam_option_make("-m", "--mark", gaminfo_parse_option);
   options[6] = gam_option_make("-n", "--length", gaminfo_parse_option);
   options[7] = gam_option_make("-p", "--pregap", gaminfo_parse_option);
+  options[8] = gam_option_make("-bf", "--build-flags", gaminfo_parse_option);
   int out = gam_run(instance, options, GAMINFO_OPTION_COUNT, gaminfo_help,
                     gaminfo_read, gaminfo_act, gaminfo_done);
   instance = gam_instance_free(instance);
