@@ -3,6 +3,7 @@
  */
 
 #include "common/constants.h"
+#include "common/math.h"
 #include "gapcm/gapcm.h"
 #include <assert.h>
 #include <stdlib.h>
@@ -77,7 +78,7 @@ void gamtest_sector(const uint8_t *sector) {
 #else
     assert(encode[index] == 0);
 #endif
-    assert(encode[index + 1] == sector[index + 1]);
+    assert(encode[index + 1] == math_min_u8(sector[index + 1], UINT8_MAX - 1));
   }
 }
 
@@ -91,6 +92,13 @@ int main() {
     assert(decode == gamtest_decode_table[sample]);
     assert(encode == sample);
   }
+  uint8_t sample = UINT8_MAX;
+  uint8_t decode = gapcm_decode_sample(sample);
+  uint8_t encode = gapcm_encode_sample(decode);
+  printf("  0x%02x -> 0x%02x (0x%02x) -> 0x%02x" EOL, sample, decode,
+         gamtest_decode_table[sample], encode);
+  assert(decode == gamtest_decode_table[sample]);
+  assert(encode == sample - 1);
   printf("Sector transcode for origin `0x%02x` and sample byte count of "
          "`%u`." EOL,
          GAPCM_SAMPLE_ORIGIN, GAPCM_SAMPLE_BYTES);

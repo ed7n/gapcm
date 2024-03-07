@@ -183,6 +183,9 @@ gapcm_iocontext_make(const struct GaPcmHeader *header, FILE *restrict stream,
   return out;
 }
 
+/** Returns the smaller of the two given unsigned 8-bit integers. */
+uint8_t gapcm_math_min_u8(uint8_t a, uint8_t b) { return a < b ? a : b; }
+
 /** Safely performs the given assignment. */
 static void gapcm_string_assign(const char **restrict assignee,
                                 const char *restrict assigner) {
@@ -339,9 +342,10 @@ uint8_t gapcm_encode_sample(const uint8_t sample) {
   //     (   0 - 0 =    0) & 0x80 :   0 - 0 + 128 = 128 = 0x80
   //    127 -> 0xff:
   //     ( 127 - 0 =  127) & 0x80 : 127 - 0 + 128 = 255 = 0xff
-  return (sample - GAPCM_SAMPLE_ORIGIN) & 0x80
-             ? 127 - (sample & 0x7f)
-             : sample - GAPCM_SAMPLE_ORIGIN + 128;
+  uint8_t clamped = gapcm_math_min_u8(sample, GAPCM_SAMPLE_ORIGIN + 126);
+  return (clamped - GAPCM_SAMPLE_ORIGIN) & 0x80
+             ? 127 - (clamped & 0x7f)
+             : clamped - GAPCM_SAMPLE_ORIGIN + 128;
 }
 
 size_t gapcm_encode_sector(const uint8_t *restrict block, const size_t count,

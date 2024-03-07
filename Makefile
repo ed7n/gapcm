@@ -20,7 +20,7 @@ mingw-w64 release: all
 .SECONDEXPANSION:
 
 gamdec gamenc gaminfo gamtest:: $(foreach object, $$@ gapcm/gapcm gam \
-		$(foreach object, application strings strtonum, \
+		$(foreach object, application math strings strtonum, \
 		common/${object}), ${OUTPUT}/${object}.o)
 	${CC} ${CFLAGS} ${GMFC_CFLAGS} ${CPPFLAGS} ${GMFC_CPPFLAGS} ${GMFC_LDFLAGS} \
 			-o $@ $^ ${LDLIBS}

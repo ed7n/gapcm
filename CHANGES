@@ -2,9 +2,15 @@ GAPCM: Changes
 
 —Update 0
 
+——Revision 6, 03/06/2024.
+- GAMplay: `endless`.
+- Test case for 0xff.
+- Clamp encoder input samples to 0xfe (#1).
+  - Decoder input samples remain unclamped.
+
 ——Revision 5, 08/13/2023.
 - Prober: `--build-flags`.
--- Updated playback helper to match output format with sample byte count.
+- Updated playback helper to match output format with sample byte count.
 - Fixed misspaced help text for the prober's `--mark`.
 
 ——Revision 4, 07/13/2023.

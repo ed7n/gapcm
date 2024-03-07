@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# GAMplay u0r1 by Brendon, 08/12/2023.
+# GAMplay u0r2 by Brendon, 03/06/2024.
 # ——GAPCM playback helper. https://ed7n.github.io/gapcm
 
 # Decoder executable.
@@ -33,6 +33,10 @@ type 'ffplay' &> /dev/null || GAM.die '`ffplay` not found.'
 type "${GAM_DEC}" &> /dev/null || GAM.die '`'"${GAM_DEC}"'` not found.'
 type "${GAM_PRB}" &> /dev/null || GAM.die '`'"${GAM_PRB}"'` not found.'
 (( ${#} )) || GAM.die 'No file.'
+(( ${#} >= 2 )) && [ "${1}" == 'endless' ] && {
+  gamOpr='endless'
+  shift || :
+}
 [ -e "${1}" ] || GAM.die 'Not found.'
 [ -r "${1}" ] || GAM.die 'No read permission.'
 case $(( ($("${GAM_PRB}" -bf) + 1) % 2 )) in
@@ -60,9 +64,13 @@ gamRat="${GAM_RAT}"
   } || :
 } || gamCnm='0'
 gamAfc='afade=t=in:d='"${GAM_FID}"','
-(( gamLen / GAM_LOT < GAM_RAT - 1 )) && {
-  gamLoc=1
-  gamOpr='single' || :
+[ "${gamOpr}" == 'endless' ] && {
+  gamLoc=-1 || :
+} || {
+  (( gamLen / GAM_LOT < GAM_RAT - 1 )) && {
+    gamLoc=1
+    gamOpr='single' || :
+  }
 } || {
   (( gamLoc = GAM_LOC + GAM_FOD / GAM_LOT + 1 ))
   gamEnd="${gamLen}"' * '"${GAM_LOC}"' + '"${gamMrk}"
